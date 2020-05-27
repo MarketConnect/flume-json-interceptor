@@ -18,7 +18,11 @@ package pl.schibsted.flume.interceptor.json;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.base.Charsets;
-import com.nebhale.jsonpath.JsonPath;
+
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+import com.jayway.jsonpath.ReadContext;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.flume.Context;
 import org.apache.flume.Event;
@@ -32,8 +36,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static pl.schibsted.flume.interceptor.json.JsonInterceptor.Constants.CONFIG_SERIALIZERS;
-import static pl.schibsted.flume.interceptor.json.JsonInterceptor.Constants.CONFIG_HEADER_NAME;
-import static pl.schibsted.flume.interceptor.json.JsonInterceptor.Constants.CONFIG_HEADER_JSONPATH;
+import static pl.schibsted.flume.interceptor.json.JsonInterceptor.Constants.CONFIG_HEADER_NAMES;
+import static pl.schibsted.flume.interceptor.json.JsonInterceptor.Constants.CONFIG_HEADER_JSONPATHS;
 import static pl.schibsted.flume.interceptor.json.JsonInterceptor.Constants.DEFAULT_SERIALIZER;
 import static pl.schibsted.flume.interceptor.json.JsonInterceptor.Constants.CONFIG_SERIALIZER_TYPE;
 import static pl.schibsted.flume.interceptor.json.JsonInterceptor.Constants.CONFIG_SERIALIZER_NAME;
@@ -42,13 +46,13 @@ public class JsonInterceptor implements Interceptor {
     private static final Logger logger =
             LoggerFactory.getLogger(JsonInterceptor.class);
 
-    private String headerName;
-    private String headerJSONPath;
+    private String[] headerNames;
+    private String[] headerJSONPaths;
     private final JsonInterceptorSerializer serializer;
 
-    public JsonInterceptor(String headerName, String headerJSONPath, JsonInterceptorSerializer serializer) {
-        this.headerName = headerName;
-        this.headerJSONPath = headerJSONPath;
+    public JsonInterceptor(String headerNames, String headerJSONPaths, JsonInterceptorSerializer serializer) {
+        this.headerNames = headerNames.split(",");
+        this.headerJSONPaths = headerJSONPaths.split(",");
         this.serializer = serializer;
     }
 
@@ -62,11 +66,12 @@ public class JsonInterceptor implements Interceptor {
 
             String body = new String(event.getBody(), Charsets.UTF_8);
             Map<String, String> headers = event.getHeaders();
-            //String value = JsonPath.read(body, headerJSONPath);
-            JsonPath namePath = JsonPath.compile(headerJSONPath);
-            String value  = namePath.read(body,String.class);
-            if (value != null) {
-                headers.put(headerName, serializer.serialize(value));
+            ReadContext ctx = JsonPath.parse(body);
+            for (int i = 0; i < headerNames.length; i++) {
+                try {
+                    String value = ctx.read(headerJSONPaths[i], String.class);
+                    headers.put(headerNames[i], serializer.serialize(value));
+                } catch (PathNotFoundException e) {}
             }
 
         } catch (java.lang.ClassCastException e) {
@@ -96,24 +101,24 @@ public class JsonInterceptor implements Interceptor {
 
     public static class Builder implements Interceptor.Builder {
 
-        private String headerName;
-        private String headerJSONPath;
+        private String headerNames;
+        private String headerJSONPaths;
         private JsonInterceptorSerializer serializer;
         private final JsonInterceptorSerializer defaultSerializer = new JsonInterceptorPassThroughSerializer();
 
         @Override
         public void configure(Context context) {
-            headerName = context.getString(CONFIG_HEADER_NAME);
-            headerJSONPath = context.getString(CONFIG_HEADER_JSONPATH);
+            headerNames = context.getString(CONFIG_HEADER_NAMES);
+            headerJSONPaths = context.getString(CONFIG_HEADER_JSONPATHS);
 
             configureSerializers(context);
         }
 
         @Override
         public JsonInterceptor build() {
-            Preconditions.checkArgument(headerName != null, "Header name was misconfigured");
-            Preconditions.checkArgument(headerJSONPath != null, "Header JSONPath was misconfigured");
-            return new JsonInterceptor(headerName, headerJSONPath, serializer);
+            Preconditions.checkArgument(headerNames != null, "Header name was misconfigured");
+            Preconditions.checkArgument(headerJSONPaths != null, "Header JSONPath was misconfigured");
+            return new JsonInterceptor(headerNames, headerJSONPaths, serializer);
         }
 
         private void configureSerializers(Context context) {
@@ -163,8 +168,8 @@ public class JsonInterceptor implements Interceptor {
 
         public static final String CONFIG_SERIALIZERS = "serializers";
         public static final String DEFAULT_SERIALIZER = "DEFAULT";
-        public static final String CONFIG_HEADER_NAME = "name";
-        public static final String CONFIG_HEADER_JSONPATH = "jsonpath";
+        public static final String CONFIG_HEADER_NAMES = "names";
+        public static final String CONFIG_HEADER_JSONPATHS = "jsonpaths";
         public static final String CONFIG_SERIALIZER_TYPE = "type";
         public static final String CONFIG_SERIALIZER_NAME = "name";
     }

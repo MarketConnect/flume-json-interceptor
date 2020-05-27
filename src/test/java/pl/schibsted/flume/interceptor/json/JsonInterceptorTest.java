@@ -74,10 +74,10 @@ public class JsonInterceptorTest {
         context.put("serializers", "s1");
         context.put("serializers.s1.name", "s1");
         if (!headerName.isEmpty()) {
-            context.put("name", headerName);
+            context.put("names", headerName);
         }
         if (!headerJSONPath.isEmpty()) {
-            context.put("jsonpath", headerJSONPath);
+            context.put("jsonpaths", headerJSONPath);
         }
         return context;
     }
