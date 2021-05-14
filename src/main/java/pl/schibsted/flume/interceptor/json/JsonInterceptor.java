@@ -22,6 +22,8 @@ import com.google.common.base.Charsets;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.jayway.jsonpath.ReadContext;
+import net.minidev.json.JSONArray;
+import net.minidev.json.JSONObject;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.flume.Context;
@@ -69,7 +71,15 @@ public class JsonInterceptor implements Interceptor {
             ReadContext ctx = JsonPath.parse(body);
             for (int i = 0; i < headerNames.length; i++) {
                 try {
-                    String value = ctx.read(headerJSONPaths[i], String.class);
+                    Object result = ctx.read(headerJSONPaths[i]);
+                    String value;
+                    if (result instanceof JSONObject) {
+                        value = JSONObject.toJSONString((JSONObject) result);
+                    } else if (result instanceof JSONArray) {
+                        value = JSONArray.toJSONString((JSONArray) result);
+                    } else {
+                        value = ctx.read(headerJSONPaths[i], String.class);
+                    }
                     headers.put(headerNames[i], serializer.serialize(value));
                 } catch (PathNotFoundException e) {}
             }
